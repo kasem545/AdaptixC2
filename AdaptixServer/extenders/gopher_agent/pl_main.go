@@ -36,7 +36,7 @@ type Teamserver interface {
 	TsAgentBuildExecute(builderId string, workingDir string, program string, args ...string) error
 	TsAgentBuildLog(builderId string, status int, message string) error
 
-	TsAgentConsoleOutput(agentId string, messageType int, message string, clearText string, store bool)
+	TsAgentConsoleOutput(agentId string, client string, messageType int, message string, clearText string, store bool)
 
 	TsPivotCreate(pivotId string, pAgentId string, chAgentId string, pivotName string, isRestore bool) error
 	TsGetPivotInfoByName(pivotName string) (string, string, string)
@@ -191,6 +191,9 @@ func TunnelMessageClose(channelId int) adaptix.TaskData {
 func TunnelMessageReverse(tunnelId int, port int) adaptix.TaskData {
 	var packData []byte
 	/// START CODE HERE
+	packerData, _ := msgpack.Marshal(ParamsRportfwdStart{TunnelId: tunnelId, Port: port})
+	cmd := Command{Code: COMMAND_RPORTFWD_START, Data: packerData}
+	packData, _ = msgpack.Marshal(cmd)
 	/// END CODE HERE
 	return makeProxyTask(packData)
 }
@@ -777,6 +780,111 @@ func (ext *ExtenderAgent) CreateCommand(agentData adaptix.AgentData, args map[st
 		}
 		packerData, _ := msgpack.Marshal(ParamsLs{Path: dir})
 		cmd = Command{Code: COMMAND_LS, Data: packerData}
+
+	case "lportfwd":
+		taskData.Type = adaptix.TASK_TYPE_TUNNEL
+
+		lportNumber, _ := getFloatArg(args, "lport")
+		lport := int(lportNumber)
+		if lport < 1 || lport > 65535 {
+			err = errors.New("port must be from 1 to 65535")
+			goto RET
+		}
+
+		if subcommand == "start" {
+			var lhost string
+			var fhost string
+			var tunnelId string
+			lhost, err = getStringArg(args, "lhost")
+			if err != nil {
+				goto RET
+			}
+			fhost, err = getStringArg(args, "fwdhost")
+			if err != nil {
+				goto RET
+			}
+			fportNumber, _ := getFloatArg(args, "fwdport")
+			fport := int(fportNumber)
+			if fport < 1 || fport > 65535 {
+				err = errors.New("port must be from 1 to 65535")
+				goto RET
+			}
+
+			tunnelId, err = Ts.TsTunnelCreateLportfwd(agentData.Id, "", lhost, lport, fhost, fport)
+			if err != nil {
+				goto RET
+			}
+			taskData.TaskId, err = Ts.TsTunnelStart(tunnelId)
+			if err != nil {
+				goto RET
+			}
+
+			taskData.Message = fmt.Sprintf("Started local port forwarding on %s:%d to %s:%d", lhost, lport, fhost, fport)
+			taskData.MessageType = adaptix.MESSAGE_SUCCESS
+			taskData.ClearText = "\n"
+
+		} else if subcommand == "stop" {
+			taskData.Completed = true
+
+			Ts.TsTunnelStopLportfwd(agentData.Id, lport)
+
+			taskData.Message = fmt.Sprintf("Local port forwarding on %d stopped", lport)
+			taskData.MessageType = adaptix.MESSAGE_SUCCESS
+			taskData.ClearText = "\n"
+
+		} else {
+			err = errors.New("subcommand must be 'start' or 'stop'")
+			goto RET
+		}
+
+	case "rportfwd":
+		taskData.Type = adaptix.TASK_TYPE_TUNNEL
+
+		lportNumber, _ := getFloatArg(args, "lport")
+		lport := int(lportNumber)
+		if lport < 1 || lport > 65535 {
+			err = errors.New("port must be from 1 to 65535")
+			goto RET
+		}
+
+		if subcommand == "start" {
+			var fhost string
+			var tunnelId string
+			fhost, err = getStringArg(args, "fwdhost")
+			if err != nil {
+				goto RET
+			}
+			fportNumber, _ := getFloatArg(args, "fwdport")
+			fport := int(fportNumber)
+			if fport < 1 || fport > 65535 {
+				err = errors.New("port must be from 1 to 65535")
+				goto RET
+			}
+
+			tunnelId, err = Ts.TsTunnelCreateRportfwd(agentData.Id, "", lport, fhost, fport)
+			if err != nil {
+				goto RET
+			}
+			taskData.TaskId, err = Ts.TsTunnelStart(tunnelId)
+			if err != nil {
+				goto RET
+			}
+
+			messageData.Message = fmt.Sprintf("Starting reverse port forwarding %d to %s:%d", lport, fhost, fport)
+			messageData.Status = adaptix.MESSAGE_INFO
+
+		} else if subcommand == "stop" {
+			taskData.Completed = true
+
+			Ts.TsTunnelStopRportfwd(agentData.Id, lport)
+
+			taskData.MessageType = adaptix.MESSAGE_SUCCESS
+			taskData.Message = "Reverse port forwarding has been stopped"
+
+		} else {
+			err = errors.New("subcommand must be 'start' or 'stop'")
+			goto RET
+		}
 
 	case "mv":
 		src, err := getStringArg(args, "src")
@@ -1644,10 +1752,9 @@ func (ext *ExtenderAgent) ProcessData(agentData adaptix.AgentData, decryptedData
 
 			case COMMAND_REV2SELF:
 				task.Message = "Token reverted successfully"
-				emptyImpersonate := ""
 				_ = Ts.TsAgentUpdateDataPartial(agentData.Id, struct {
 					Impersonated *string `json:"impersonated"`
-				}{Impersonated: &emptyImpersonate})
+				}{Impersonated: new("")})
 
 			case COMMAND_RM:
 				task.Message = "Object deleted successfully"
@@ -1669,6 +1776,23 @@ func (ext *ExtenderAgent) ProcessData(agentData adaptix.AgentData, decryptedData
 				}
 				task.Message = fmt.Sprintf("Archive '%s' successfully created", params.Path)
 				task.MessageType = adaptix.MESSAGE_SUCCESS
+
+			case COMMAND_RPORTFWD_START:
+				var params AnsRportfwdStatus
+				err := msgpack.Unmarshal(cmd.Data, &params)
+				if err != nil {
+					continue
+				}
+				taskId, msg, updateErr := Ts.TsTunnelUpdateRportfwd(params.TunnelId, params.Success)
+				if updateErr != nil {
+					task.MessageType = adaptix.MESSAGE_ERROR
+					task.Message = "Reverse port forward failed"
+				} else {
+					task.MessageType = adaptix.MESSAGE_SUCCESS
+					task.Message = msg
+				}
+				task.TaskId = taskId
+				task.Completed = true
 
 			case COMMAND_ERROR:
 				var params AnsError

@@ -5,6 +5,7 @@
 #include <Utils/CustomElements.h>
 #include <UI/Widgets/AbstractDock.h>
 #include <UI/Widgets/AdaptixWidget.h>
+#include <oclero/qlementine/widgets/LineEdit.hpp>
 
 #include <QSortFilterProxyModel>
 
@@ -118,19 +119,31 @@ public:
 
     void setAgentFilter(const QString &agent) {
         agentFilter = agent;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
     void setTypeFilter(const QString &type) {
         typeFilter = type;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
     void setStatusFilter(const QString &status) {
         statusFilter = status;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
     void setTextFilter(const QString &text){
         textFilter = text;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
 
 protected:
@@ -334,7 +347,7 @@ Q_OBJECT
 
     QWidget*        searchWidget    = nullptr;
     QHBoxLayout*    searchLayout    = nullptr;
-    QLineEdit*      inputFilter     = nullptr;
+    oclero::qlementine::LineEdit* inputFilter = nullptr;
     QCheckBox*      autoSearchCheck = nullptr;
     QComboBox*      comboAgent      = nullptr;
     QComboBox*      comboType       = nullptr;

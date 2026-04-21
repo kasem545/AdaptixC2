@@ -22,6 +22,7 @@ const (
 	TUNNEL_PACK   = 4
 	TERMINAL_PACK = 5
 	BOF_PACK      = 6
+	RPORTFWD_PACK = 7
 )
 
 type StartMsg struct {
@@ -55,6 +56,15 @@ type TunnelPack struct {
 	Iv        []byte `msgpack:"iv"`
 	Alive     bool   `msgpack:"alive"`
 	Reason    byte   `msgpack:"reason"`
+}
+
+type RportfwdPack struct {
+	Id        uint   `msgpack:"id"`
+	Type      uint   `msgpack:"type"`
+	TunnelId  int    `msgpack:"tunnel_id"`
+	ChannelId int    `msgpack:"channel_id"`
+	Key       []byte `msgpack:"key"`
+	Iv        []byte `msgpack:"iv"`
 }
 
 type TermPack struct {
@@ -316,6 +326,16 @@ type ParamsTunnelResume struct {
 	ChannelId int `msgpack:"channel_id"`
 }
 
+type ParamsRportfwdStart struct {
+	TunnelId int `msgpack:"tunnel_id"`
+	Port     int `msgpack:"port"`
+}
+
+type AnsRportfwdStatus struct {
+	TunnelId int  `msgpack:"tunnel_id"`
+	Success  bool `msgpack:"success"`
+}
+
 const (
 	COMMAND_ERROR      = 0
 	COMMAND_PWD        = 1
@@ -346,6 +366,9 @@ const (
 
 	COMMAND_TERMINAL_START = 35
 	COMMAND_TERMINAL_STOP  = 36
+
+	COMMAND_RPORTFWD_START = 37
+	COMMAND_RPORTFWD_STOP  = 38
 
 	COMMAND_EXEC_BOF       = 50
 	COMMAND_EXEC_BOF_OUT   = 51

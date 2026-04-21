@@ -33,6 +33,7 @@ type Teamserver interface {
 	TsTunnelConnectionClose(channelId int, writeOnly bool)
 	TsTunnelConnectionHalt(channelId int, errorCode byte)
 	TsTunnelConnectionData(channelId int, data []byte)
+	TsTunnelRportfwdAccept(tunnelId int, channelId int) error
 }
 
 type PluginListener struct{}

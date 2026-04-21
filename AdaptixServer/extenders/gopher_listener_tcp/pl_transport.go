@@ -70,6 +70,7 @@ const (
 	TUNNEL_PACK   = 4
 	TERMINAL_PACK = 5
 	BOF_PACK      = 6
+	RPORTFWD_PACK = 7
 )
 
 type StartMsg struct {
@@ -103,6 +104,15 @@ type TunnelPack struct {
 	Iv        []byte `msgpack:"iv"`
 	Alive     bool   `msgpack:"alive"`
 	Reason    byte   `msgpack:"reason"`
+}
+
+type RportfwdPack struct {
+	Id        uint   `msgpack:"id"`
+	Type      uint   `msgpack:"type"`
+	TunnelId  int    `msgpack:"tunnel_id"`
+	ChannelId int    `msgpack:"channel_id"`
+	Key       []byte `msgpack:"key"`
+	Iv        []byte `msgpack:"iv"`
 }
 
 type TermPack struct {
@@ -281,11 +291,10 @@ func (t *TransportTCP) handleConnection(conn net.Conn, ts Teamserver) {
 				goto ERR
 			}
 		} else {
-			emptyMark := ""
 			_ = Ts.TsAgentUpdateDataPartial(agentId, struct {
 				Mark     *string `json:"mark"`
 				Listener *string `json:"listener"`
-			}{Mark: &emptyMark, Listener: &t.Name})
+			}{Mark: new(""), Listener: &t.Name})
 		}
 
 		t.AgentConnects.Put(agentId, connection)
@@ -317,10 +326,9 @@ func (t *TransportTCP) handleConnection(conn net.Conn, ts Teamserver) {
 			}
 		}
 
-		disconnectMark := "Disconnect"
 		_ = ts.TsAgentUpdateDataPartial(agentId, struct {
 			Mark *string `json:"mark"`
-		}{Mark: &disconnectMark})
+		}{Mark: new("Disconnect")})
 		t.AgentConnects.Delete(agentId)
 		_ = conn.Close()
 
@@ -460,6 +468,76 @@ func (t *TransportTCP) handleConnection(conn net.Conn, ts Teamserver) {
 		wg.Wait()
 
 		ts.TsTunnelConnectionClose(tunPack.ChannelId, false)
+
+	case RPORTFWD_PACK:
+
+		var rpackPack RportfwdPack
+		err := msgpack.Unmarshal(initMsg.Data, &rpackPack)
+		if err != nil {
+			goto ERR
+		}
+
+		agentId := fmt.Sprintf("%08x", rpackPack.Id)
+
+		if err := Ts.TsTunnelRportfwdAccept(rpackPack.TunnelId, rpackPack.ChannelId); err != nil {
+			goto ERR
+		}
+
+		ts.TsTunnelConnectionResume(agentId, rpackPack.ChannelId, true)
+
+		rpr, rpw, err := Ts.TsTunnelGetPipe(agentId, rpackPack.ChannelId)
+		if err != nil {
+			goto ERR
+		}
+
+		rBlockEnc, _ := aes.NewCipher(rpackPack.Key)
+		rEncStream := cipher.NewCTR(rBlockEnc, rpackPack.Iv)
+		rEncWriter := &cipher.StreamWriter{S: rEncStream, W: conn}
+
+		rDecCipher, _ := aes.NewCipher(rpackPack.Key)
+		rDecStream := cipher.NewCTR(rDecCipher, rpackPack.Iv)
+		rDecReader := &cipher.StreamReader{S: rDecStream, R: conn}
+
+		_ = rpw.Close()
+
+		var rCloseOnce sync.Once
+		rCloseAll := func() {
+			rCloseOnce.Do(func() {
+				_ = conn.Close()
+				_ = rpr.Close()
+			})
+		}
+
+		var rwg sync.WaitGroup
+
+		rwg.Add(1)
+		go func() {
+			defer rwg.Done()
+			_, _ = io.Copy(rEncWriter, rpr)
+			rCloseAll()
+		}()
+
+		rwg.Add(1)
+		go func() {
+			defer rwg.Done()
+			buf := make([]byte, 0x8000)
+			for {
+				n, err := rDecReader.Read(buf)
+				if n > 0 {
+					data := make([]byte, n)
+					copy(data, buf[:n])
+					ts.TsTunnelConnectionData(rpackPack.ChannelId, data)
+				}
+				if err != nil {
+					break
+				}
+			}
+			rCloseAll()
+		}()
+
+		rwg.Wait()
+
+		ts.TsTunnelConnectionClose(rpackPack.ChannelId, false)
 
 	case TERMINAL_PACK:
 

@@ -25,6 +25,8 @@
 #include <QAbstractTableModel>
 #include <QSortFilterProxyModel>
 
+namespace oclero::qlementine { class Switch; class SegmentedControl; }
+
 class AxScriptEngine;
 class AdaptixWidget;
 
@@ -461,6 +463,69 @@ public:
 
 Q_SIGNALS:
     void stateChanged();
+};
+
+
+
+/// SWITCH
+
+class AxSwitchWrapper : public QObject, public AbstractAxElement, public AbstractAxVisualElement {
+Q_OBJECT
+    oclero::qlementine::Switch* sw;
+
+public:
+    explicit AxSwitchWrapper(oclero::qlementine::Switch* sw, QObject* parent = nullptr);
+
+    QVariant jsonMarshal() const override;
+    void jsonUnmarshal(const QVariant& value) override;
+
+    QWidget* widget() const override;
+    Q_INVOKABLE void setEnabled(const bool enable) const override { widget()->setEnabled(enable); }
+    Q_INVOKABLE void setVisible(const bool enable) const override { widget()->setVisible(enable); }
+    Q_INVOKABLE bool getEnabled() const override { return widget()->isEnabled(); }
+    Q_INVOKABLE bool getVisible() const override { return widget()->isVisible(); }
+
+    Q_INVOKABLE bool isChecked() const;
+    Q_INVOKABLE void setChecked(bool checked) const;
+    Q_INVOKABLE void setText(const QString& text) const;
+    Q_INVOKABLE QString text() const;
+
+Q_SIGNALS:
+    void toggled(bool checked);
+};
+
+
+
+/// SEGMENTED CONTROL
+
+class AxSegmentedControlWrapper : public QObject, public AbstractAxElement, public AbstractAxVisualElement {
+Q_OBJECT
+    oclero::qlementine::SegmentedControl* segControl;
+
+public:
+    explicit AxSegmentedControlWrapper(oclero::qlementine::SegmentedControl* sc, QObject* parent = nullptr);
+
+    QVariant jsonMarshal() const override;
+    void jsonUnmarshal(const QVariant& value) override;
+
+    QWidget* widget() const override;
+    Q_INVOKABLE void setEnabled(const bool enable) const override { widget()->setEnabled(enable); }
+    Q_INVOKABLE void setVisible(const bool enable) const override { widget()->setVisible(enable); }
+    Q_INVOKABLE bool getEnabled() const override { return widget()->isEnabled(); }
+    Q_INVOKABLE bool getVisible() const override { return widget()->isVisible(); }
+
+    Q_INVOKABLE void    addItem(const QString& text) const;
+    Q_INVOKABLE void    addItems(const QJSValue& array) const;
+    Q_INVOKABLE int     currentIndex() const;
+    Q_INVOKABLE void    setCurrentIndex(int index) const;
+    Q_INVOKABLE QString currentText() const;
+    Q_INVOKABLE int     count() const;
+    Q_INVOKABLE void    removeItem(int index) const;
+    Q_INVOKABLE QString itemText(int index) const;
+    Q_INVOKABLE void    setItemText(int index, const QString& text) const;
+
+Q_SIGNALS:
+    void currentIndexChanged();
 };
 
 
@@ -923,7 +988,10 @@ public:
 
     void setFilterText(const QString& text) {
         m_filterText = text;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
 
 protected:
@@ -1077,7 +1145,10 @@ public:
 
     void setFilterText(const QString& text) {
         m_filterText = text;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
 
 protected:
@@ -1213,7 +1284,10 @@ public:
 
     void setFilterText(const QString& text) {
         m_filterText = text;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
 
 protected:
@@ -1356,7 +1430,10 @@ public:
 
     void setFilterText(const QString& text) {
         m_filterText = text;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
 
 protected:
@@ -1502,7 +1579,10 @@ public:
 
     void setFilterText(const QString& text) {
         m_filterText = text;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
 
 protected:

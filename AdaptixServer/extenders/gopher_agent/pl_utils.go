@@ -258,6 +258,16 @@ type ParamsTunnelResume struct {
 	ChannelId int `msgpack:"channel_id"`
 }
 
+type ParamsRportfwdStart struct {
+	TunnelId int `msgpack:"tunnel_id"`
+	Port     int `msgpack:"port"`
+}
+
+type AnsRportfwdStatus struct {
+	TunnelId int  `msgpack:"tunnel_id"`
+	Success  bool `msgpack:"success"`
+}
+
 const (
 	COMMAND_ERROR      = 0
 	COMMAND_PWD        = 1
@@ -288,6 +298,9 @@ const (
 
 	COMMAND_TERMINAL_START = 35
 	COMMAND_TERMINAL_STOP  = 36
+
+	COMMAND_RPORTFWD_START = 37
+	COMMAND_RPORTFWD_STOP  = 38
 
 	COMMAND_EXEC_BOF       = 50
 	COMMAND_EXEC_BOF_OUT   = 51

@@ -1,4 +1,5 @@
 #include <Agent/Agent.h>
+#include <oclero/qlementine/widgets/Menu.hpp>
 #include <UI/Graph/GraphScene.h>
 #include <UI/Graph/GraphItem.h>
 #include <UI/Widgets/AdaptixWidget.h>
@@ -42,12 +43,18 @@ void GraphScene::contextMenuEvent( QGraphicsSceneContextMenuEvent *event )
 
     auto graphics_items = selectedItems();
     if(graphics_items.empty()) {
-        if( (graphics_items = items(event->scenePos())).empty() ) {
+        auto allItems = items(event->scenePos());
+        graphics_items.clear();
+        for (auto* gi : allItems) {
+            if (dynamic_cast<GraphItem*>(gi))
+                graphics_items.append(gi);
+        }
+        if( graphics_items.empty() ) {
             auto* sessionsGraph = qobject_cast<SessionsGraph*>(parent());
             if (!sessionsGraph)
                 return QGraphicsScene::contextMenuEvent( event );
 
-            auto layoutMenu = QMenu("Layout");
+            oclero::qlementine::Menu layoutMenu("Layout");
             auto* actionLeftToRight = layoutMenu.addAction("Left to Right");
             auto* actionTopToBottom = layoutMenu.addAction("Top to Bottom");
 
@@ -56,15 +63,17 @@ void GraphScene::contextMenuEvent( QGraphicsSceneContextMenuEvent *event )
             actionLeftToRight->setChecked(sessionsGraph->GetLayoutDirection() == LayoutLeftToRight);
             actionTopToBottom->setChecked(sessionsGraph->GetLayoutDirection() == LayoutTopToBottom);
 
-            auto ctxMenu = QMenu();
-            ctxMenu.addMenu(&layoutMenu);
-
-            const auto action = ctxMenu.exec(event->screenPos());
-            if (action == actionLeftToRight) {
+            connect(actionLeftToRight, &QAction::triggered, sessionsGraph, [sessionsGraph]() {
                 sessionsGraph->SetLayoutDirection(LayoutLeftToRight);
-            } else if (action == actionTopToBottom) {
+            }, Qt::QueuedConnection);
+            connect(actionTopToBottom, &QAction::triggered, sessionsGraph, [sessionsGraph]() {
                 sessionsGraph->SetLayoutDirection(LayoutTopToBottom);
-            }
+            }, Qt::QueuedConnection);
+
+            oclero::qlementine::Menu ctxMenu;
+            ctxMenu.addMenu(&layoutMenu);
+            ctxMenu.exec(event->screenPos());
+            event->accept();
             return;
         }
     }
@@ -79,7 +88,7 @@ void GraphScene::contextMenuEvent( QGraphicsSceneContextMenuEvent *event )
         return;
 
 
-    QMenu ctxMenu;
+    oclero::qlementine::Menu ctxMenu;
 
     auto agentMenu = ctxMenu.addMenu("Agent");
     agentMenu->addAction("Execute command", this, [graphics_items]() {
@@ -204,4 +213,5 @@ void GraphScene::contextMenuEvent( QGraphicsSceneContextMenuEvent *event )
     ctxMenu.addMenu(sessionMenu);
 
     ctxMenu.exec(event->screenPos());
+    event->accept();
 }

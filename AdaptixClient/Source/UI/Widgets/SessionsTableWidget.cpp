@@ -1,4 +1,5 @@
 #include <Agent/Agent.h>
+#include <oclero/qlementine/widgets/Menu.hpp>
 #include <UI/Widgets/SessionsTableWidget.h>
 #include <UI/Widgets/BrowserFilesWidget.h>
 #include <UI/Widgets/BrowserProcessWidget.h>
@@ -33,15 +34,11 @@ SessionsTableWidget::SessionsTableWidget( AdaptixWidget* w ) : DockTab("Sessions
             tableView->setFocus();
     });
 
-    connect(inputFilter,    &QLineEdit::textChanged,        this, &SessionsTableWidget::onFilterChanged);
-    connect(inputFilter,    &QLineEdit::returnPressed,      this, [this]() { proxyModel->setTextFilter(inputFilter->text()); });
-    connect(comboAgentType, &QComboBox::currentTextChanged, this, &SessionsTableWidget::onFilterChanged);
-#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
-    connect(checkOnlyActive, &QCheckBox::checkStateChanged, this, &SessionsTableWidget::onFilterChanged);
-#else
-    connect(checkOnlyActive, &QCheckBox::stateChanged, this, &SessionsTableWidget::onFilterChanged);
-#endif
-    connect(hideButton, &ClickableLabel::clicked, this, &SessionsTableWidget::toggleSearchPanel);
+    connect(inputFilter,     &QLineEdit::textChanged,        this, &SessionsTableWidget::onFilterChanged);
+    connect(inputFilter,     &QLineEdit::returnPressed,      this, [this]() { proxyModel->setTextFilter(inputFilter->text()); });
+    connect(comboAgentType,  &QComboBox::currentTextChanged, this, &SessionsTableWidget::onFilterChanged);
+    connect(checkOnlyActive, &QCheckBox::checkStateChanged,  this, &SessionsTableWidget::onFilterChanged);
+    connect(hideButton,      &ClickableLabel::clicked,       this, &SessionsTableWidget::toggleSearchPanel);
 
     shortcutSearch = new QShortcut(QKeySequence("Ctrl+F"), this);
     shortcutSearch->setContext(Qt::WidgetWithChildrenShortcut);
@@ -100,7 +97,8 @@ void SessionsTableWidget::createUI()
     searchWidget = new QWidget(this);
     searchWidget->setVisible(false);
 
-    inputFilter = new QLineEdit(searchWidget);
+    inputFilter = new oclero::qlementine::LineEdit(searchWidget);
+    inputFilter->setIcon(QIcon(":/icons/search"));
     inputFilter->setPlaceholderText("filter: (admin | root) & ^(test)");
     inputFilter->setMaximumWidth(300);
 
@@ -169,7 +167,7 @@ void SessionsTableWidget::createUI()
         if (logical < 0 || logical >= SC_ColumnCount)
             return;
 
-        QMenu menu(this);
+        oclero::qlementine::Menu menu(this);
         QAction* actAutoFit = menu.addAction("Auto fit this column");
         QAction* chosen = menu.exec(header->mapToGlobal(pos));
         if (chosen == actAutoFit)
@@ -362,7 +360,7 @@ void SessionsTableWidget::onFilterChanged() const
 
 void SessionsTableWidget::handleSessionsTableMenu(const QPoint &pos)
 {
-    QMenu ctxMenu;
+    oclero::qlementine::Menu ctxMenu;
 
     QModelIndex index = tableView->indexAt(pos);
     if (index.isValid()) {
@@ -403,6 +401,14 @@ void SessionsTableWidget::handleSessionsTableMenu(const QPoint &pos)
         sessionMenu->addAction("Hide on client", this, &SessionsTableWidget::actionItemHide);
 
         ctxMenu.addAction("Console", this, &SessionsTableWidget::actionConsoleOpen);
+        if (agentIds.size() == 1) {
+            ctxMenu.addAction("VNC Viewer", this, [this, agentIds]() {
+                adaptixWidget->LoadVncUI(agentIds.first());
+            });
+            ctxMenu.addAction("HVNC", this, [this, agentIds]() {
+                adaptixWidget->LoadHvncUI(agentIds.first());
+            });
+        }
         ctxMenu.addSeparator();
         ctxMenu.addMenu(agentMenu);
 

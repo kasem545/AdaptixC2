@@ -495,6 +495,17 @@ func (ts *Teamserver) TsTunnelStop(TunnelId string) error {
 		return ErrTunnelNotFound
 	}
 
+	if tunnel.Type == adaptix.TUNNEL_TYPE_REVERSE {
+		tunnelIdInt, parseErr := strconv.ParseInt(TunnelId, 16, 64)
+		if parseErr == nil {
+			agent, agentErr := ts.getAgent(tunnel.Data.AgentId)
+			if agentErr == nil {
+				rawTaskData := tunnel.Callbacks.Close(int(tunnelIdInt))
+				tunnelManageTask(agent, rawTaskData)
+			}
+		}
+	}
+
 	if tunnel.listener != nil {
 		_ = tunnel.listener.Close()
 	}
@@ -547,19 +558,6 @@ func (ts *Teamserver) TsTunnelStopRportfwd(AgentId string, Port int) {
 	port := strconv.Itoa(Port)
 	id := krypt.CRC32([]byte(AgentId + "rportfwd" + port))
 	TunnelId := fmt.Sprintf("%08x", id)
-
-	tunnel, ok := ts.TunnelManager.GetTunnel(TunnelId)
-	if !ok {
-		return
-	}
-
-	agent, err := ts.getAgent(tunnel.Data.AgentId)
-	if err != nil {
-		return
-	}
-
-	rawTaskData := tunnel.Callbacks.Close(int(id))
-	tunnelManageTask(agent, rawTaskData)
 
 	_ = ts.TsTunnelStop(TunnelId)
 }
@@ -663,6 +661,24 @@ func (ts *Teamserver) TsTunnelConnectionHalt(channelId int, errorCode byte) {
 		}
 	}
 	ts.TunnelManager.CloseChannelByIdOnly(channelId, false)
+}
+
+func (ts *Teamserver) TsTunnelRportfwdAccept(tunnelId int, channelId int) error {
+	tunId := fmt.Sprintf("%08x", tunnelId)
+	tunnel, ok := ts.TunnelManager.GetTunnel(tunId)
+	if !ok {
+		return ErrTunnelNotFound
+	}
+
+	target := tunnel.Data.Fhost + ":" + tunnel.Data.Fport
+	fwdConn, err := net.Dial("tcp", target)
+	if err != nil {
+		return err
+	}
+
+	stc := NewSafeTunnelChannel(ts.TunnelManager, channelId, fwdConn, nil, "TCP")
+	ts.TunnelManager.RegisterChannel(tunId, tunnel, stc.TunnelChannel)
+	return nil
 }
 
 func (ts *Teamserver) TsTunnelConnectionAccept(tunnelId int, channelId int) {

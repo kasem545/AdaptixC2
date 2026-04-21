@@ -82,6 +82,7 @@ var profileIndex int
 var profile utils.Profile
 var AgentId uint32
 var encKey []byte
+var activeAddr string
 
 func main() {
 
@@ -173,6 +174,7 @@ func main() {
 			continue
 		} else {
 			i = 0
+			activeAddr = profile.Addresses[addrIndex]
 		}
 
 		/// Recv Banner

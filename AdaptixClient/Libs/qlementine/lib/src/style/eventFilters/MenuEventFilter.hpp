@@ -6,6 +6,7 @@
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 #include <oclero/qlementine/utils/MenuUtils.hpp>
 
+#include <QApplication>
 #include <QEvent>
 #include <QObject>
 #include <QMenu>
@@ -86,9 +87,19 @@ public:
             return true;
 
           if (action->menu() == nullptr) {
-            // Trigger action directly without flash animation for reliability
             action->trigger();
-            _menu->close();
+            for (QWidget* w = _menu; w != nullptr; ) {
+              auto* m = qobject_cast<QMenu*>(w);
+              if (m) {
+                m->close();
+                w = m->parentWidget();
+              } else {
+                break;
+              }
+            }
+            while (auto* popup = QApplication::activePopupWidget()) {
+              popup->close();
+            }
             return true;
           }
         } else if (_menu->rect().contains(mousePos)) {

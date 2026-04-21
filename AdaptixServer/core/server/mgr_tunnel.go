@@ -88,8 +88,7 @@ func NewTunnelManager(ts *Teamserver) *TunnelManager {
 		ts: ts,
 		bufferPool: sync.Pool{
 			New: func() interface{} {
-				buf := make([]byte, TunnelBufferSize)
-				return &buf
+				return new(make([]byte, TunnelBufferSize))
 			},
 		},
 	}
@@ -220,6 +219,8 @@ func (tm *TunnelManager) closeChannelInternal(tunnel *Tunnel, channel *TunnelCha
 	if channel == nil {
 		return
 	}
+
+	channel.CloseIngress()
 
 	if channel.conn != nil {
 		_ = channel.conn.Close()
@@ -453,10 +454,7 @@ func (stc *SafeTunnelChannel) Close() bool {
 	}
 
 	stc.closing.Store(true)
-	if stc.ingressChan != nil {
-		close(stc.ingressChan)
-		stc.ingressChan = nil
-	}
+	stc.CloseIngress()
 
 	stc.cancel()
 

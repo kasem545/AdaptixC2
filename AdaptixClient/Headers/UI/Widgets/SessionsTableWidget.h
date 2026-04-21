@@ -5,6 +5,7 @@
 #include <MainAdaptix.h>
 #include <Utils/CustomElements.h>
 #include <UI/Widgets/AbstractDock.h>
+#include <oclero/qlementine/widgets/LineEdit.hpp>
 #include <UI/Widgets/AdaptixWidget.h>
 #include <Agent/Agent.h>
 #include <Client/Settings.h>
@@ -112,25 +113,40 @@ public:
     void setSearchVisible(bool visible) {
         if (searchVisible == visible) return;
         searchVisible = visible;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
     void setOnlyActive(bool active) {
         if (onlyActive == active) return;
         onlyActive = active;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
     void setTextFilter(const QString& text) {
         if (textFilter == text) return;
         textFilter = text;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
     void setAgentTypes(const QSet<QString>& types) {
         if (agentTypes == types) return;
         agentTypes = types;
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
     void updateVisible() {
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         invalidateFilter();
+QT_WARNING_POP
     }
 
 protected:
@@ -445,11 +461,11 @@ Q_OBJECT
 
     QWidget*        searchWidget    = nullptr;
     QHBoxLayout*    searchLayout    = nullptr;
-    QLineEdit*      inputFilter     = nullptr;
     QCheckBox*      autoSearchCheck = nullptr;
     QComboBox*      comboAgentType  = nullptr;
     QCheckBox*      checkOnlyActive = nullptr;
     ClickableLabel* hideButton      = nullptr;
+    oclero::qlementine::LineEdit* inputFilter = nullptr;
 
     mutable bool columnStateReady = false;
     bool bufferingEnabled = false;

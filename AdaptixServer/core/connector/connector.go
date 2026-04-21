@@ -17,13 +17,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const SMALL_VERSION = "v1.3"
+
 type Teamserver interface {
 	CreateOTP(otpType string, data interface{}) (string, error)
 	ValidateOTP(token string) (string, interface{}, bool)
 
 	TsClientExists(username string) bool
 	TsClientDisconnect(username string)
-	TsClientConnect(username string, version string, socket *websocket.Conn, clientType uint8, consoleTeamMode bool, subscriptions []string)
+	TsClientConnect(username string, socket *websocket.Conn, clientType uint8, consoleTeamMode bool, subscriptions []string)
 	TsClientSync(username string)
 	TsClientSubscribe(username string, categories []string, consoleTeamMode *bool)
 
@@ -52,7 +54,7 @@ type Teamserver interface {
 	TsAgentSetTick(agentId string, listenerName string) error
 	TsAgentTickUpdate()
 
-	TsAgentConsoleOutput(agentId string, messageType int, message string, clearText string, store bool)
+	TsAgentConsoleOutput(agentId string, client string, messageType int, message string, clearText string, store bool)
 	TsAgentConsoleOutputClient(agentId string, client string, messageType int, message string, clearText string)
 	TsAgentConsoleErrorCommand(agentId string, client string, cmdline string, message string, HookId string, HandlerId string)
 
@@ -132,7 +134,7 @@ type Teamserver interface {
 	TsAxScriptUnloadUser(name string) error
 	TsAxScriptList() (string, error)
 	TsAxScriptCommands() (string, error)
-	TsAxScriptResolveHooks(agentName string, agentId string, listenerRegName string, os int, cmdline string, args map[string]interface{}) (string, string, bool, error)
+	TsAxScriptResolveHooks(agentName string, agentId string, listenerRegName string, os int, cmdline string, args map[string]interface{}, client string) (string, string, bool, error)
 	TsAxScriptIsServerHook(id string) bool
 	TsAxScriptParseAndExecute(agentId string, username string, cmdline string) error
 	AxGetAgentContext(agentId string) (agentName string, listenerRegName string, osType int, err error)
